@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  workflows: write
+  contents: read
 
 concurrency:
   group: upstream-sync
@@ -20,13 +19,14 @@ jobs:
       UPSTREAM_REPO: byJoey/cfnew
       UPSTREAM_BRANCH: main
       TARGET_BRANCH: main
+      PUSH_URL: https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ github.repository }}.git
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SYNC_TOKEN }}
 
       - name: Fetch upstream
         run: |
@@ -65,8 +65,8 @@ jobs:
       - name: Push
         if: steps.check.outputs.changed == 'true'
         run: |
-          git push origin "HEAD:${TARGET_BRANCH}"
-          git push origin --tags --force || echo "tag 推送被跳过（tag 已存在且不可覆盖）"
+          git push "${PUSH_URL}" "HEAD:${TARGET_BRANCH}"
+          git push "${PUSH_URL}" --tags --force || echo "tag 推送被跳过"
 
       - name: Summary
         if: always()
