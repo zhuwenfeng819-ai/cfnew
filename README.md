@@ -1,14 +1,14 @@
-# CFnew - 终端 v2.9.8
+# CFnew - 终端 v3.1
 
 > **⚠️ 重要：部署后请将兼容日期设置为 `2026-01-20`**
-> 
+>
 > **Pages 部署：**
 > 1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)
 > 2. 进入 **Workers 和 Pages** → 选择你的 Pages 项目
 > 3. 点击 **设置** → **运行时**
 > 4. 找到 **兼容性日期**，选择 `2026-01-20`，点击 **保存**
 > 5. 返回 **部署** → **创建部署** → 上传文件
-> 
+>
 > **Worker 部署：**
 > 1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)
 > 2. 进入 **Workers 和 Pages** → 选择你的 Worker
@@ -32,7 +32,37 @@
 - 自动识别：根据User-Agent自动返回对应格式
 - 多语言：支持中文和波斯语，根据浏览器语言自动切换
 
-## v2.9.8 更新
+## v3.1 更新
+
+- 新增「家宽链式」：CF 节点带路，落地换成住宅宽带，出网就是家庭宽带的 IP
+  - 配置管理里勾「开启家宽链式」（或环境变量 `jk=yes`），客户端列表会多一个「CLASH 家宽」专属订阅
+  - 经典轻量版也支持，见「[家宽链式](#家宽链式)」
+- SING-BOX 订阅跟上新版内核：原来的配置在 1.14 上直接起不来，现在要求 1.12 以上
+
+## v3.0 更新
+
+- 「指定地区 (wk)」的第一项从「自动检测」改成「官方直连」
+  - 留空时直接用内置的官方地址，不再探测 Worker 所在地区去匹配第三方 ProxyIP 域名
+  - **不占用 `p` 变量**，`p` 仍然留给你手填自己的 ProxyIP
+  - 想指定落地地区，照旧在下拉里选具体国家
+- 删掉了地区自动探测逻辑，少一层不确定性，也少一个外部依赖
+- 说明：CF 是任播，同一个地址在不同位置访问会落到不同机房，所以按地区挑 IP 没意义
+
+## v2.9.9 更新
+
+- 出站代理支持 HTTP / HTTPS：`s` 变量按前缀区分协议，不写前缀仍是 SOCKS5，老配置不受影响
+  - `http://user:pass@host:port` 明文连代理后建立隧道
+  - `https://user:pass@host:port` 连代理这一跳走 TLS
+  - 认证走 Basic，由 Worker 自动生成；`http` / `https` 可省略端口，默认 80 / 443
+  - 节点 path 里的 `s=` 写法一致
+- 出站方式改为三选一（`qj`），并把语义正过来
+  - 留空：优先走代理（与旧版默认行为一致）
+  - `no`：优先直连，失败再走代理（与旧版 `qj=no` 一致）
+  - `only`：**只走代理，连不上直接断开**，不回落直连或备用地址，避免出口 IP 泄漏
+  - 面板标签由「降级控制」改为「出站方式」，选项文案重写
+- 详见「[出站代理](#出站代理)」
+
+## v2.9.8c 更新
 
 - 订阅转换内部实现：Clash / Stash / Sing-box / Surge / Loon / Quantumult X 配置全部由 Worker 直接生成，不再依赖任何外部 sub-converter
   - 完整规则集：Clash 使用 Loyalsoldier `rule-providers`；Sing-box 使用 MetaCubeX SRS；Surge / Loon / QuanX 使用 ACL4SSR / blackmatrix7 远端规则
@@ -125,7 +155,7 @@
 | :--- | :--- | :--- |
 | `u` | 你的 UUID | 必需，用于访问订阅和配置界面 |
 | `p` | proxyip | 可选，自定义ProxyIP地址和端口，支持 IPv4/IPv6/域名。设置后 `wk` 地区匹配失效（互斥）。也可在节点 path 里单独指定 |
-| `s` | 你的SOCKS5地址 | 可选，格式：`user:pass@host:port` 或 `host:port`。也可在节点 path 里单独指定 |
+| `s` | 出站代理地址 | 可选。支持 SOCKS5 和 HTTP/HTTPS 代理，见下方「[出站代理](#出站代理)」。也可在节点 path 里单独指定 |
 | `d` | 自定义路径 | 可选，如 `/mypath` 或 `/path/to/sub`，不填用UUID路径。路径没 `/` 开头会自动补上 |
 | `wk` | 地区代码 | 可选，手动指定Worker地区，如 `SG`、`HK`、`US`、`JP`。设置 `p` 后此项失效（互斥）。也可在节点 path 里单独指定 |
 
@@ -155,13 +185,53 @@
 | `epd` | yes/no | 可选，启用优选域名（默认启用） |
 | `epi` | yes/no | 可选，启用优选IP（默认启用） |
 | `egi` | yes/no | 可选，启用GitHub默认优选（默认启用） |
-| `qj` | no | 可选，设为`no`启用降级：CF直连失败→SOCKS5→fallback |
+| `qj` | no / only | 可选，出站方式。留空=优先走代理，`no`=优先直连、失败再走代理，`only`=只走代理不回落。见「[出站代理](#出站代理)」 |
 | `dkby` | yes | 可选，设为`yes`只生成TLS节点 |
 | `ech` | yes/no | 可选，启用ECH功能（默认禁用，启用后自动开启仅TLS模式） |
 | `alpn` | ALPN列表 | 可选，只写入TLS节点链接参数，留空则不写 |
 | `yxby` | yes | 可选，设为`yes`关闭所有优选功能 |
 | `rm` | no | 可选，设为`no`关闭地区智能匹配 |
 | `ae` | yes | 可选，设为`yes`允许API管理（默认关闭） |
+| `jk` | yes/no | 可选，开启家宽链式（默认关闭），图形化里也能勾。见「[家宽链式](#家宽链式)」 |
+
+### 家宽链式
+
+把落地换成别人家的宽带，出网 IP 就是住宅 IP，不再是机房 IP。适合那些一看到机房 IP 就弹验证码的站点。
+
+链路是 `你的客户端 → cfnew(Cloudflare 边缘) → 住宅宽带 → 目标站`。
+家宽节点取自 [VPN Gate](https://www.vpngate.net/cn/) 的志愿者共享节点，靠 mihomo 的
+`dialer-proxy` 把 OpenVPN 的传输整个塞进 cfnew 节点里走，所以握手走 CF，出口是住宅宽带。
+
+**开启**：配置管理里勾上「开启家宽链式」（或者加环境变量 `jk=yes`），
+客户端列表会多出一个「CLASH 家宽」，点它就是家宽专属订阅。也可以直接用：
+
+```
+https://你的域名/{UUID}/sub?target=vg
+```
+
+没开的时候这个地址返回 403。
+
+**经典轻量版**：把文件顶部配置区的 `家宽链式` 改成 `true` 再部署，订阅地址后面加 `?target=vg`：
+
+```
+https://你的域名/{UUID}?target=vg
+```
+
+前置节点用的是配置区的「优选地址」，其余和上面一样。
+
+几个要注意的地方：
+
+- **内核要 mihomo 1.19.25 以上**，老内核不认 `type: openvpn`。
+  Clash Verge Rev、FlClash、Clash Meta for Android 都行；Stash、Surge、sing-box 这类用不了，
+  所以家宽只出 Clash 这一种订阅。
+- 订阅里是**全量**住宅节点（日本、韩国居多，几十个），不用自己挑国家和数量。
+  节点是志愿者共享的，**掉线是常态**，实测大概一半能通。
+  `🏠 家宽自动` 是 fallback 组，挂了会自己往下换；想挑国家就在 `🏠 家宽节点` 里手选，已按国家排好。
+- 已经自动剔掉 VPN Gate 自营的机房服务器，只留住宅宽带。
+- 前置只用 TLS 节点（有的话）。落地隧道的握手特征很明显，套在明文节点里等于裸奔。
+- 只走 TCP，UDP 走不了前置，节点上写的是 `udp: false`。
+- 节点源拉不到时订阅返回 503，客户端会继续用上一份，不会被空配置覆盖。
+- 速度看对方家里的上传，别指望跑满。要稳定高速还是用正常节点。
 
 #### KV存储设置（推荐）
 
@@ -221,6 +291,21 @@ v2.7开始提供，v2.9增强了筛选功能
 - 支持只显示最快的10个
 - 支持追加或替换模式
 
+#### 官方直连
+
+v3.0 开始，「指定地区 (wk)」留空就是官方直连，这也是默认值，什么都不用配。
+
+以前留空叫「自动检测」：Worker 先探测自己在哪个国家，再去匹配第三方的 ProxyIP 域名。
+现在留空直接用内置地址，不探测、不联网、不依赖别人的域名。
+
+- 内置 10 个实测可用的 Cloudflare 官方地址，分布在 10 个不同 /24 段，避免整段被墙时全灭
+- 每次连接从里面随机取一个，不是固定某一个
+- **不占用 `p` 变量**。`p` 是留给你手填自己的 ProxyIP 的，填了就以你的为准，内置地址不会覆盖
+- 想指定落地地区，在下拉里选具体国家，那条路径走的还是原来的地区匹配
+
+关于为什么不做「按地区选 IP」：Cloudflare 是任播（anycast），同一个 IP 在不同位置访问，
+落到的机房不一样。挑 IP 决定不了你落地在哪，做成地区列表属于误导。
+
 #### 多协议支持
 
 - VLESS：默认启用
@@ -242,6 +327,49 @@ v2.7开始提供，v2.9增强了筛选功能
   - `X-ECH-Status`: SUCCESS 或 FAILED
   - `X-ECH-Debug`: 详细的调试信息
   - `X-ECH-Config-Length`: ECH 配置长度（成功时）
+
+#### 出站代理
+
+`s` 变量用来指定出站代理，所有出站流量都会从它走。支持两类协议，靠前缀区分：
+
+| 写法 | 走的协议 | 说明 |
+| :--- | :--- | :--- |
+| `host:port` | SOCKS5 | 不写前缀就是 SOCKS5，和以前一样 |
+| `socks5://host:port` | SOCKS5 | 显式写法，等价于上面 |
+| `http://host:port` | HTTP | 明文连代理，再发建隧请求 |
+| `https://host:port` | HTTPS | 连代理这一跳走 TLS，适合代理本身要求加密的场景 |
+
+带认证就在前面加 `用户名:密码@`：
+
+```
+user:pass@1.2.3.4:1080
+socks5://user:pass@1.2.3.4:1080
+http://user:pass@1.2.3.4:8080
+https://user:pass@proxy.example.com:8443
+```
+
+说明几点：
+
+- HTTP/HTTPS 代理的认证走 Basic，由 Worker 自动生成，不用自己拼。
+- 只有 `http://` 和 `https://` 可以省略端口，分别默认 80 和 443；SOCKS5 必须写端口。
+- 地址后面多写的路径会被忽略，`http://1.2.3.4:8080/xxx` 等同于 `http://1.2.3.4:8080`。
+- 代理必须支持隧道转发（也就是能代理任意 TCP）。只能转发网页请求的代理用不了。
+- 在节点 path 里单独指定时写法完全一样，如 `s=http://user:pass@host:8080`。
+
+**出站方式（`qj`）**
+
+配好 `s` 之后，用 `qj` 决定流量怎么走。面板里对应「出站方式」下拉框：
+
+| `qj` | 行为 | 什么时候用 |
+| :--- | :--- | :--- |
+| 留空（默认） | 优先走代理，代理不通再回落 | 想走代理，但断了也别断网 |
+| `no` | 优先直连，失败再走代理 | 只把代理当备用线路 |
+| `only` | 只走代理，连不上直接断开 | 要求出口 IP 固定，不接受回落 |
+
+`only` 和默认的区别在**失败时**：默认会回落到备用地址或直连，这时出口就变成 Worker
+自己的 IP 了；`only` 宁可断开也不回落，出口 IP 不会漏。
+
+没填 `s` 时三个选项都一样，都是直连。
 
 #### 自定义路径（d变量）
 
@@ -293,7 +421,7 @@ v2.9.4 新增。在 VLESS/Trojan 分享链接的 `path` 字段里追加查询参
 | `p` | 覆盖 ProxyIP（支持带端口） | `p=1.1.1.1` 或 `p=1.2.3.4:8443` |
 | `wk` | 覆盖 Worker 地区 | `wk=jp`、`wk=us`、`wk=sg` |
 | `rm` | 关闭地区智能匹配 | `rm=no` |
-| `s` | 覆盖 SOCKS5 代理 | `s=user:pass@host:1080` |
+| `s` | 覆盖出站代理 | `s=user:pass@host:1080`、`s=http://user:pass@host:8080` |
 
 **优先级：path 参数 > KV/环境变量 > 自动检测**
 
@@ -310,8 +438,9 @@ path 示例：
 /?ed=2048&wk=jp
 /?ed=2048&wk=sg&rm=no
 
-# 指定 SOCKS5（可与 wk 搭配）
-/?ed=2048&s=user:pass@socks5.host:1080&wk=us
+# 指定出站代理（可与 wk 搭配）
+/?ed=2048&s=user:pass@proxy.host:1080&wk=us
+/?ed=2048&s=http://user:pass@proxy.host:8080&wk=us
 ```
 
 > 不在上表中的变量（如 `ev`、`et`、`yx` 等）属于订阅生成级配置，在 WebSocket 握手阶段已过路由，放在 path 里无效，仍需在环境变量或 KV 中设置。
@@ -337,7 +466,7 @@ path 示例：
 #### 高级控制
 
 - `rm=no` 关闭地区智能匹配
-- `qj=no` 启用降级模式（CF直连失败→SOCKS5→fallback）
+- `qj=no` 优先直连，失败再走代理；`qj=only` 只走代理，连不上直接断开
 - `dkby=yes` 只生成TLS节点
 - `ech=yes` 启用ECH功能（启用后自动开启仅TLS模式）
 - `alpn=h3,h2` 指定TLS节点ALPN，留空则不写
@@ -370,4 +499,4 @@ path 示例：
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=byJoey/cfnew&type=Timeline)](https://www.star-history.com/#byJoey/cfnew&Timeline&LogScale)
+[![Star History Chart](https://star-history.dera.page/svg?repos=byJoey/cfnew&type=Timeline)](https://star-history.dera.page/#byJoey/cfnew&Timeline&LogScale)
