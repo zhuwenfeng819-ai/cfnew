@@ -1,0 +1,80 @@
+name: Sync from upstream
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: byJoey/cfnew
+      UPSTREAM_BRANCH: main
+      TARGET_BRANCH: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream --tags --prune --force
+
+      - name: Compare with upstream
+        id: check
+        run: |
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse "upstream/${UPSTREAM_BRANCH}")
+          echo "local=${LOCAL}" >> "$GITHUB_OUTPUT"
+          echo "remote=${REMOTE}" >> "$GITHUB_OUTPUT"
+          if [ "${LOCAL}" = "${REMOTE}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          set -e
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge --ff-only "upstream/${UPSTREAM_BRANCH}"; then
+            echo "fast-forward 同步完成"
+          elif git merge --no-edit -X theirs "upstream/${UPSTREAM_BRANCH}"; then
+            echo "本仓库存在自有提交，已合并上游（冲突处以上游为准）"
+          else
+            git merge --abort || true
+            echo "::error::自动合并出现冲突，需要手动处理"
+            exit 1
+          fi
+
+      - name: Push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git push origin "HEAD:${TARGET_BRANCH}"
+          git push origin --tags --force || echo "tag 推送被跳过（tag 已存在且不可覆盖）"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### 上游同步结果" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 上游仓库: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 同步前 HEAD: ${LOCAL_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 上游 HEAD: ${REMOTE_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 是否有更新: ${{ steps.check.outputs.changed }}" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          LOCAL_SHA: ${{ steps.check.outputs.local }}
+          REMOTE_SHA: ${{ steps.check.outputs.remote }}
